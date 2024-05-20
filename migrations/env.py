@@ -73,15 +73,13 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
 
-    database_schema = settings.database_schema
-
     def include_name_filter(name, type_, parent_names):
         if type_ == "schema":
             return name == database_schema
 
         return True
 
-    '''def include_object(object, name, type_, reflected, compare_to):
+    def include_object(object, name, type_, reflected, compare_to):
         if type_ == 'foreign_key_constraint' and compare_to and (
                 compare_to.elements[0].target_fullname == db_name + '.' +
                 object.elements[0].target_fullname or
@@ -94,22 +92,12 @@ def run_migrations_online() -> None:
         elif object.table.schema == db_name or object.table.schema is None:
             return True
         else:
-            return False'''
+            return False
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection,
-            target_metadata=target_metadata,
-            # The following 3 lines are required to support non-default
-            # database schema for our database objects
-            # version_table_schema=database_schema,
-            # include_schemas=True,
-            # include_name=include_name_filter,
+            connection=connection, target_metadata=target_metadata, include_object=include_object
         )
-
-        connection.execute(text('set search_path to "%s"' %
-                           settings.postgres_db_schema))
-        # connection.execute(text(CREATE_SCHEMA_STATEMENT))
 
         with context.begin_transaction():
             context.run_migrations()
