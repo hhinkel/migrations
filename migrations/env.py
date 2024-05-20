@@ -1,3 +1,4 @@
+from models import Base
 import os
 from logging.config import fileConfig
 
@@ -10,7 +11,12 @@ from alembic import context
 # access to the values within the .ini file in use.
 config = context.config
 
-config.set_main_option("sqlalchemy.url", os.getenv("DB_URI"))
+load_all_models()
+
+# active config ini section is the db name that we have chosen
+
+config.set_main_option("sqlalchemy.url",
+                       f'{os.getenv("DB_URI")}/{db_name}')
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -21,7 +27,6 @@ if config.config_file_name is not None:
 # for 'autogenerate' support
 # from myapp import mymodel
 # target_metadata = mymodel.Base.metadata
-from models import Base
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
@@ -61,16 +66,50 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
         poolclass=pool.NullPool,
     )
 
+    database_schema = settings.database_schema
+
+    def include_name_filter(name, type_, parent_names):
+        if type_ == "schema":
+            return name == database_schema
+
+        return True
+
+    '''def include_object(object, name, type_, reflected, compare_to):
+        if type_ == 'foreign_key_constraint' and compare_to and (
+                compare_to.elements[0].target_fullname == db_name + '.' +
+                object.elements[0].target_fullname or
+                db_name + '.' + compare_to.elements[0].target_fullname == object.elements[
+                    0].target_fullname):
+            return False
+        if type_ == 'table':
+            if object.schema == db_name or object.schema is None:
+                return True
+        elif object.table.schema == db_name or object.table.schema is None:
+            return True
+        else:
+            return False'''
+
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            # The following 3 lines are required to support non-default
+            # database schema for our database objects
+            # version_table_schema=database_schema,
+            # include_schemas=True,
+            # include_name=include_name_filter,
         )
+
+        connection.execute(text('set search_path to "%s"' %
+                           settings.postgres_db_schema))
+        # connection.execute(text(CREATE_SCHEMA_STATEMENT))
 
         with context.begin_transaction():
             context.run_migrations()
